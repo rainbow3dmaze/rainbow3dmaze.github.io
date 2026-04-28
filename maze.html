@@ -1,0 +1,2028 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>3D Maze</title>
+  <style>
+    :root {
+      --panel: rgba(0, 0, 0, 0.72);
+      --border: rgba(255, 255, 255, 0.24);
+      --text: rgba(255, 255, 255, 0.92);
+      --muted: rgba(255, 255, 255, 0.68);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+      color: var(--text);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      user-select: none;
+    }
+
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      background: #000;
+      outline: none;
+      cursor: crosshair;
+    }
+
+    button, input, select, textarea {
+      font: inherit;
+    }
+
+    button {
+      border: 1px solid rgba(255, 255, 255, 0.26);
+      border-radius: 10px;
+      padding: 8px 10px;
+      color: #fff;
+      background: rgba(255, 255, 255, 0.08);
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: rgba(255, 255, 255, 0.16);
+    }
+
+    input, select, textarea {
+      border: 1px solid rgba(255, 255, 255, 0.24);
+      border-radius: 10px;
+      padding: 8px 10px;
+      color: #fff;
+      background: rgba(0, 0, 0, 0.45);
+      min-width: 0;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 92px;
+      resize: vertical;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+    }
+
+    #hud {
+      position: fixed;
+      top: 14px;
+      left: 14px;
+      padding: 12px 14px;
+      max-width: min(420px, calc(100vw - 28px));
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--panel);
+      backdrop-filter: blur(8px);
+      font-size: 13px;
+      line-height: 1.55;
+      letter-spacing: 0.02em;
+      pointer-events: none;
+      text-shadow: 0 0 8px rgba(255, 255, 255, 0.34);
+    }
+
+    #hud .small {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    #inventory {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      display: flex;
+      gap: 10px;
+      pointer-events: none;
+    }
+
+    .slot {
+      width: 88px;
+      height: 76px;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      border-radius: 16px;
+      background: rgba(0, 0, 0, 0.62);
+      box-shadow: inset 0 0 18px rgba(255, 255, 255, 0.04), 0 0 18px rgba(0, 0, 0, 0.4);
+      display: grid;
+      grid-template-rows: 20px 1fr 18px;
+      padding: 7px;
+      overflow: hidden;
+    }
+
+    .slotKey {
+      color: rgba(255, 255, 255, 0.56);
+      font-size: 12px;
+      line-height: 1;
+    }
+
+    .slotName {
+      align-self: center;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 700;
+      text-shadow: 0 0 10px currentColor;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .slotHint {
+      text-align: center;
+      color: rgba(255, 255, 255, 0.55);
+      font-size: 11px;
+      line-height: 1;
+    }
+
+    #effects {
+      position: fixed;
+      right: 18px;
+      bottom: 108px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 6px;
+      pointer-events: none;
+      font-size: 12px;
+    }
+
+    .effectBadge {
+      padding: 5px 8px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 999px;
+      background: rgba(0, 0, 0, 0.58);
+      text-shadow: 0 0 8px currentColor;
+    }
+
+    #centerDot {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      width: 10px;
+      height: 10px;
+      margin-left: -5px;
+      margin-top: -5px;
+      border: 1px solid rgba(255, 255, 255, 0.72);
+      border-radius: 999px;
+      box-shadow: 0 0 12px rgba(255, 255, 255, 0.6);
+      pointer-events: none;
+      opacity: 0.72;
+    }
+
+    #toast {
+      position: fixed;
+      left: 50%;
+      bottom: 112px;
+      transform: translateX(-50%);
+      padding: 10px 14px;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 999px;
+      background: rgba(0, 0, 0, 0.74);
+      color: #fff;
+      opacity: 0;
+      transition: opacity 160ms ease, transform 160ms ease;
+      pointer-events: none;
+      white-space: nowrap;
+      text-shadow: 0 0 8px rgba(255, 255, 255, 0.42);
+    }
+
+    #toast.visible {
+      opacity: 1;
+      transform: translateX(-50%) translateY(-4px);
+    }
+
+    .overlay {
+      position: fixed;
+      inset: 0;
+      display: none;
+      place-items: center;
+      background: rgba(0, 0, 0, 0.62);
+      backdrop-filter: blur(5px);
+      z-index: 10;
+    }
+
+    .overlay.visible {
+      display: grid;
+    }
+
+    .panel {
+      width: min(880px, calc(100vw - 34px));
+      max-height: min(86vh, 860px);
+      overflow: auto;
+      padding: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.24);
+      border-radius: 22px;
+      background: rgba(0, 0, 0, 0.82);
+      box-shadow: 0 0 42px rgba(255, 255, 255, 0.14);
+    }
+
+    .panel h1, .panel h2, .panel h3 {
+      margin: 0 0 12px;
+    }
+
+    .panel h1 {
+      font-size: clamp(26px, 4vw, 48px);
+      background: linear-gradient(90deg, #ff004c, #ff9f00, #fff200, #00ff88, #00c8ff, #7c4dff, #ff00d4);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .grid2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .grid3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .section {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    .muted {
+      color: rgba(255, 255, 255, 0.64);
+    }
+
+    #startOverlay {
+      background: rgba(0, 0, 0, 0.38);
+      pointer-events: none;
+    }
+
+    #startOverlay .panel {
+      text-align: center;
+      width: min(620px, calc(100vw - 34px));
+    }
+
+    #startOverlay.visible {
+      display: grid;
+    }
+
+    #messageOverlay .panel {
+      width: min(620px, calc(100vw - 34px));
+      text-align: center;
+    }
+
+    #bigMessage {
+      font-size: clamp(28px, 6vw, 70px);
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      margin-bottom: 10px;
+      background: linear-gradient(90deg, #ff004c, #fff200, #00ff88, #00c8ff, #ff00d4);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      white-space: nowrap;
+    }
+
+    #subMessage {
+      color: rgba(255, 255, 255, 0.78);
+      line-height: 1.7;
+      white-space: pre-line;
+    }
+
+    .danger {
+      color: #ff4d6d;
+      text-shadow: 0 0 12px rgba(255, 77, 109, 0.8);
+    }
+
+    @media (max-width: 720px) {
+      #inventory { gap: 6px; right: 10px; bottom: 10px; }
+      .slot { width: 72px; height: 68px; }
+      .grid2, .grid3 { grid-template-columns: 1fr; }
+      #hud { font-size: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="game" tabindex="0" aria-label="Rainbow 3D Maze"></canvas>
+  <div id="centerDot"></div>
+
+  <div id="hud">
+    <div><b>W/S</b>: 前後移動　<b>A/D</b>: 左右水平移動　<b>Mouse</b>: 視点操作</div>
+    <div><b>Q/E</b>: 旋回補助　<b>Shift</b>: ダッシュ　<b>1/2/3</b>: アイテム使用</div>
+    <div><b>R</b>: 新規迷路　満杯時は <b>1/2/3</b> でアイテム入替</div>
+    <div>出口まで: <span id="distanceText">---</span>　Seed: <span id="seedText">---</span></div>
+    <div id="pickupText" class="small"></div>
+  </div>
+
+  <div id="effects"></div>
+
+  <div id="inventory">
+    <div class="slot" id="slot0"><div class="slotKey">1</div><div class="slotName">EMPTY</div><div class="slotHint">---</div></div>
+    <div class="slot" id="slot1"><div class="slotKey">2</div><div class="slotName">EMPTY</div><div class="slotHint">---</div></div>
+    <div class="slot" id="slot2"><div class="slotKey">3</div><div class="slotName">EMPTY</div><div class="slotHint">---</div></div>
+  </div>
+
+  <div id="toast"></div>
+
+  <div id="startOverlay" class="overlay visible">
+    <div class="panel">
+      <h1>3D Maze</h1>
+      <p>クリックして開始。</p>
+    </div>
+  </div>
+
+  <div id="messageOverlay" class="overlay">
+    <div class="panel">
+      <div id="bigMessage">CLEAR</div>
+      <div id="subMessage"></div>
+      <div class="section row" style="justify-content:center;">
+        <button id="retrySameButton">同じ迷路を再挑戦</button>
+        <button id="newMazeButton">新しい迷路</button>
+        <button id="saveFromResultButton">この迷路を保存</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="cheatOverlay" class="overlay">
+    <div class="panel">
+      <div class="row" style="justify-content:space-between;">
+        <h2>DEBUG / CHEAT MENU</h2>
+        <button id="closeCheatButton">閉じる</button>
+      </div>
+      <p class="muted">通常プレイ用の地図表示とは別に、デバッグ用ミニマップと正解ルートを切り替えられる。</p>
+
+      <div class="section">
+        <h3>表示</h3>
+        <div class="grid3">
+          <button id="toggleDebugMapButton">デバッグミニマップ切替</button>
+          <button id="toggleRouteButton">正解ルート表示切替</button>
+          <button id="toggleCoordsButton">座標/FPS表示切替</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>アイテム / 効果</h3>
+        <div class="grid3">
+          <button data-add-item="map">地図を追加</button>
+          <button data-add-item="xray">透視を追加</button>
+          <button data-add-item="speed">加速を追加</button>
+          <button data-add-item="phase">壁抜けを追加</button>
+          <button data-add-item="compass">コンパスを追加</button>
+          <button data-add-item="sonar">ソナーを追加</button>
+          <button data-add-item="hawkeye">ホークアイを追加</button>
+          <button data-add-item="reroll">リロールを追加</button>
+          <button id="addAllItemsButton">全アイテム追加</button>
+          <button id="clearInventoryButton">インベントリ消去</button>
+        </div>
+        <div class="grid3" style="margin-top:10px;">
+          <button id="giveMapEffectButton">地図10秒</button>
+          <button id="giveXrayEffectButton">透視10秒</button>
+          <button id="giveSpeedEffectButton">加速10秒</button>
+          <button id="givePhaseEffectButton">壁抜け10秒</button>
+          <button id="giveCompassEffectButton">コンパス15秒</button>
+          <button id="fireSonarButton">ソナー発動</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>移動 / 迷路</h3>
+        <div class="grid3">
+          <button id="teleportStartButton">スタートへ移動</button>
+          <button id="teleportExitButton">出口付近へ移動</button>
+          <button id="regenerateButton">現在Seedで再生成</button>
+          <button id="newSeedButton">新規Seed生成</button>
+          <button id="retryButton">同じ迷路を再挑戦</button>
+          <button id="forceClearButton">強制クリア</button>
+        </div>
+        <div class="row" style="margin-top:10px;">
+          <label>Seed <input id="seedInput" type="text" /></label>
+          <label>幅 <input id="mazeWInput" type="number" min="5" max="39" step="2" value="17" /></label>
+          <label>高さ <input id="mazeHInput" type="number" min="5" max="39" step="2" value="17" /></label>
+          <button id="generateBySeedButton">指定Seedで生成</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>保存 / ロード</h3>
+        <div class="grid3">
+          <button id="saveMazeButton">ブラウザに保存</button>
+          <button id="loadMazeButton">ブラウザからロード</button>
+          <button id="deleteSaveButton">保存削除</button>
+          <button id="exportMazeButton">JSON書き出し</button>
+          <button id="importMazeButton">JSON読み込み</button>
+          <button id="copyMazeJsonButton">JSONを下に表示</button>
+        </div>
+        <input id="importFileInput" type="file" accept="application/json,.json" hidden />
+        <textarea id="mazeJsonText" placeholder="ここに保存JSONが表示される。貼り付けて読み込むこともできる。"></textarea>
+        <div class="row" style="margin-top:10px;">
+          <button id="loadFromTextButton">テキスト欄からロード</button>
+        </div>
+      </div>
+
+      <div class="section muted" id="debugInfo">---</div>
+    </div>
+  </div>
+
+  <script>
+    "use strict";
+
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d", { alpha: false });
+
+    const distanceText = document.getElementById("distanceText");
+    const seedText = document.getElementById("seedText");
+    const pickupText = document.getElementById("pickupText");
+    const effectsEl = document.getElementById("effects");
+    const toastEl = document.getElementById("toast");
+    const startOverlay = document.getElementById("startOverlay");
+    const messageOverlay = document.getElementById("messageOverlay");
+    const bigMessage = document.getElementById("bigMessage");
+    const subMessage = document.getElementById("subMessage");
+    const cheatOverlay = document.getElementById("cheatOverlay");
+    const debugInfo = document.getElementById("debugInfo");
+    const seedInput = document.getElementById("seedInput");
+    const mazeWInput = document.getElementById("mazeWInput");
+    const mazeHInput = document.getElementById("mazeHInput");
+    const mazeJsonText = document.getElementById("mazeJsonText");
+    const importFileInput = document.getElementById("importFileInput");
+
+    const CELL_NORTH = 1;
+    const CELL_EAST = 2;
+    const CELL_SOUTH = 4;
+    const CELL_WEST = 8;
+    const SAVE_KEY = "rainbow_3d_maze_saved_v2";
+
+    const ITEM_TYPES = {
+      map: { label: "地図", color: "#00d8ff", duration: 10, description: "10秒ミニマップ" },
+      xray: { label: "透視", color: "#b36bff", duration: 10, description: "壁30%表示" },
+      speed: { label: "加速", color: "#ffe14d", duration: 10, description: "速度上昇" },
+      phase: { label: "壁抜け", color: "#ff4d6d", duration: 8, description: "解除時注意" },
+      compass: { label: "コンパス", color: "#6dff8f", duration: 15, description: "出口方向" },
+      sonar: { label: "ソナー", color: "#67f5ff", duration: 3.6, description: "周囲探査" },
+      hawkeye: { label: "ホークアイ", color: "#ffd86b", duration: 10, description: "自分中心の上空視点" },
+      reroll: { label: "リロール", color: "#ffffff", duration: 0, description: "別アイテム化" }
+    };
+
+    const konami = ["ArrowUp", "ArrowUp", "ArrowDown", "ArrowDown", "ArrowLeft", "ArrowRight", "ArrowLeft", "ArrowRight", "KeyB", "KeyA"];
+    let konamiIndex = 0;
+    let toastTimer = 0;
+    let itemIdCounter = 1;
+
+    const keys = new Set();
+
+    const pointer = {
+      locked: false,
+      sensitivity: 0.0022
+    };
+
+    const game = {
+      seed: "",
+      mazeCellsWide: 17,
+      mazeCellsHigh: 17,
+      grid: [],
+      gridWidth: 0,
+      gridHeight: 0,
+      route: [],
+      routeSet: new Set(),
+      openCells: [],
+      items: [],
+      inventory: [null, null, null],
+      player: {
+        x: 1.5,
+        y: 1.5,
+        angle: 0,
+        radius: 0.18
+      },
+      start: { x: 1.5, y: 1.5 },
+      exit: { x: 0, y: 0 },
+      effects: {
+        map: 0,
+        xray: 0,
+        speed: 0,
+        phase: 0,
+        compass: 0,
+        hawkeye: 0
+      },
+      sonarPulses: [],
+      debug: {
+        map: false,
+        route: false,
+        coords: false
+      },
+      fov: Math.PI / 3,
+      maxDepth: 46,
+      rayStep: 1,
+      won: false,
+      gameOver: false,
+      gameOverSequence: false,
+      messageTimer: 0,
+      lastTime: performance.now(),
+      startedAt: performance.now(),
+      totalDistance: 0,
+      itemsUsed: 0,
+      wallPhaseUses: 0,
+      lastPlayerX: 1.5,
+      lastPlayerY: 1.5,
+      fps: 0,
+      hawkeyeBlend: 0,
+      replacementCandidate: null
+    };
+
+    function hashStringToUint(str) {
+      let h = 2166136261 >>> 0;
+      for (let i = 0; i < str.length; i++) {
+        h ^= str.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+      }
+      return h >>> 0;
+    }
+
+    function mulberry32(seed) {
+      let a = seed >>> 0;
+      return function rand() {
+        a |= 0;
+        a = (a + 0x6D2B79F5) | 0;
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+
+    function createRng(seedTextValue) {
+      return mulberry32(hashStringToUint(seedTextValue));
+    }
+
+    function randomSeed() {
+      const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+      let seed = "RB-";
+      const random = crypto && crypto.getRandomValues ? crypto.getRandomValues(new Uint32Array(8)) : null;
+      for (let i = 0; i < 8; i++) {
+        const n = random ? random[i] : Math.floor(Math.random() * 4294967296);
+        seed += chars[n % chars.length];
+      }
+      return seed;
+    }
+
+    function rngInt(rng, maxExclusive) {
+      return Math.floor(rng() * maxExclusive);
+    }
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function normalizeOdd(value, fallback) {
+      let n = Number.parseInt(value, 10);
+      if (!Number.isFinite(n)) n = fallback;
+      n = clamp(n, 5, 39);
+      if (n % 2 === 0) n += 1;
+      return clamp(n, 5, 39);
+    }
+
+    function shuffleInPlace(array, rng) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = rngInt(rng, i + 1);
+        const temp = array[i];
+        array[i] = array[j];
+        array[j] = temp;
+      }
+      return array;
+    }
+
+    function createMazeCells(width, height, rng) {
+      const cells = Array.from({ length: height }, () => (
+        Array.from({ length: width }, () => ({
+          walls: CELL_NORTH | CELL_EAST | CELL_SOUTH | CELL_WEST,
+          visited: false
+        }))
+      ));
+
+      const stack = [];
+      let currentX = 0;
+      let currentY = 0;
+      cells[currentY][currentX].visited = true;
+      let visitedCount = 1;
+      const total = width * height;
+
+      while (visitedCount < total) {
+        const neighbors = [];
+        if (currentY > 0 && !cells[currentY - 1][currentX].visited) neighbors.push({ x: currentX, y: currentY - 1, dir: CELL_NORTH, opposite: CELL_SOUTH });
+        if (currentX < width - 1 && !cells[currentY][currentX + 1].visited) neighbors.push({ x: currentX + 1, y: currentY, dir: CELL_EAST, opposite: CELL_WEST });
+        if (currentY < height - 1 && !cells[currentY + 1][currentX].visited) neighbors.push({ x: currentX, y: currentY + 1, dir: CELL_SOUTH, opposite: CELL_NORTH });
+        if (currentX > 0 && !cells[currentY][currentX - 1].visited) neighbors.push({ x: currentX - 1, y: currentY, dir: CELL_WEST, opposite: CELL_EAST });
+
+        if (neighbors.length > 0) {
+          const next = neighbors[rngInt(rng, neighbors.length)];
+          cells[currentY][currentX].walls &= ~next.dir;
+          cells[next.y][next.x].walls &= ~next.opposite;
+          stack.push({ x: currentX, y: currentY });
+          currentX = next.x;
+          currentY = next.y;
+          cells[currentY][currentX].visited = true;
+          visitedCount++;
+        } else {
+          const previous = stack.pop();
+          if (!previous) break;
+          currentX = previous.x;
+          currentY = previous.y;
+        }
+      }
+
+      return cells;
+    }
+
+    function cellsToGrid(cells) {
+      const cellHeight = cells.length;
+      const cellWidth = cells[0].length;
+      const gridWidth = cellWidth * 2 + 1;
+      const gridHeight = cellHeight * 2 + 1;
+      const grid = Array.from({ length: gridHeight }, () => Array.from({ length: gridWidth }, () => 1));
+
+      for (let y = 0; y < cellHeight; y++) {
+        for (let x = 0; x < cellWidth; x++) {
+          const gridX = x * 2 + 1;
+          const gridY = y * 2 + 1;
+          const walls = cells[y][x].walls;
+          grid[gridY][gridX] = 0;
+          if ((walls & CELL_NORTH) === 0) grid[gridY - 1][gridX] = 0;
+          if ((walls & CELL_EAST) === 0) grid[gridY][gridX + 1] = 0;
+          if ((walls & CELL_SOUTH) === 0) grid[gridY + 1][gridX] = 0;
+          if ((walls & CELL_WEST) === 0) grid[gridY][gridX - 1] = 0;
+        }
+      }
+
+      grid[1][0] = 0;
+      grid[gridHeight - 2][gridWidth - 1] = 0;
+      return grid;
+    }
+
+    function computeOpenCells() {
+      const cells = [];
+      for (let y = 0; y < game.gridHeight; y++) {
+        for (let x = 0; x < game.gridWidth; x++) {
+          if (game.grid[y][x] === 0) cells.push({ x, y });
+        }
+      }
+      return cells;
+    }
+
+    function computeRoute(startX, startY, endX, endY) {
+      const sx = Math.floor(startX);
+      const sy = Math.floor(startY);
+      const ex = Math.floor(endX);
+      const ey = Math.floor(endY);
+      const queue = [{ x: sx, y: sy }];
+      const visited = new Set([`${sx},${sy}`]);
+      const prev = new Map();
+      const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
+      while (queue.length > 0) {
+        const current = queue.shift();
+        if (current.x === ex && current.y === ey) break;
+        for (const [dx, dy] of dirs) {
+          const nx = current.x + dx;
+          const ny = current.y + dy;
+          const key = `${nx},${ny}`;
+          if (nx < 0 || ny < 0 || nx >= game.gridWidth || ny >= game.gridHeight) continue;
+          if (game.grid[ny][nx] !== 0 || visited.has(key)) continue;
+          visited.add(key);
+          prev.set(key, `${current.x},${current.y}`);
+          queue.push({ x: nx, y: ny });
+        }
+      }
+
+      const route = [];
+      let key = `${ex},${ey}`;
+      if (!visited.has(key)) return route;
+      while (key) {
+        const [x, y] = key.split(",").map(Number);
+        route.push({ x: x + 0.5, y: y + 0.5 });
+        if (x === sx && y === sy) break;
+        key = prev.get(key);
+      }
+      route.reverse();
+      return route;
+    }
+
+    function pickWeightedItem(rng) {
+      const table = [
+        ["map", 22],
+        ["xray", 18],
+        ["speed", 20],
+        ["phase", 13],
+        ["compass", 15],
+        ["sonar", 15],
+        ["hawkeye", 10],
+        ["reroll", 9]
+      ];
+      const total = table.reduce((sum, item) => sum + item[1], 0);
+      let roll = rng() * total;
+      for (const [type, weight] of table) {
+        roll -= weight;
+        if (roll <= 0) return type;
+      }
+      return "map";
+    }
+
+    function placeItems(rng) {
+      const candidates = game.openCells.filter((cell) => {
+        const cx = cell.x + 0.5;
+        const cy = cell.y + 0.5;
+        const fromStart = Math.hypot(cx - game.start.x, cy - game.start.y);
+        const fromExit = Math.hypot(cx - game.exit.x, cy - game.exit.y);
+        return fromStart > 4 && fromExit > 2.5;
+      });
+      shuffleInPlace(candidates, rng);
+
+      const itemCount = clamp(Math.floor((game.mazeCellsWide * game.mazeCellsHigh) / 24), 10, 28);
+      const items = [];
+      for (let i = 0; i < Math.min(itemCount, candidates.length); i++) {
+        const cell = candidates[i];
+        items.push({
+          id: itemIdCounter++,
+          type: pickWeightedItem(rng),
+          x: cell.x + 0.5,
+          y: cell.y + 0.5,
+          picked: false,
+          bob: rng() * Math.PI * 2
+        });
+      }
+      return items;
+    }
+
+    function resetRunState() {
+      game.inventory = [null, null, null];
+      game.effects.map = 0;
+      game.effects.xray = 0;
+      game.effects.speed = 0;
+      game.effects.phase = 0;
+      game.effects.compass = 0;
+      game.effects.hawkeye = 0;
+      game.hawkeyeBlend = 0;
+      game.sonarPulses = [];
+      game.won = false;
+      game.gameOver = false;
+      game.gameOverSequence = false;
+      game.messageTimer = 0;
+      game.startedAt = performance.now();
+      game.totalDistance = 0;
+      game.itemsUsed = 0;
+      game.wallPhaseUses = 0;
+      game.replacementCandidate = null;
+      game.player.x = game.start.x;
+      game.player.y = game.start.y;
+      game.player.angle = 0;
+      game.lastPlayerX = game.player.x;
+      game.lastPlayerY = game.player.y;
+      messageOverlay.classList.remove("visible");
+      hideToast();
+      updateInventoryUi();
+    }
+
+    function generateMaze(options = {}) {
+      game.seed = options.seed || randomSeed();
+      game.mazeCellsWide = normalizeOdd(options.width ?? game.mazeCellsWide, 17);
+      game.mazeCellsHigh = normalizeOdd(options.height ?? game.mazeCellsHigh, 17);
+
+      const rng = createRng(`${game.seed}:${game.mazeCellsWide}x${game.mazeCellsHigh}`);
+      const cells = createMazeCells(game.mazeCellsWide, game.mazeCellsHigh, rng);
+      game.grid = cellsToGrid(cells);
+      game.gridHeight = game.grid.length;
+      game.gridWidth = game.grid[0].length;
+      game.start = { x: 1.5, y: 1.5 };
+      game.exit = { x: game.gridWidth - 1.35, y: game.gridHeight - 1.5 };
+      game.openCells = computeOpenCells();
+      game.route = computeRoute(game.start.x, game.start.y, game.exit.x, game.exit.y);
+      game.routeSet = new Set(game.route.map((p) => `${Math.floor(p.x)},${Math.floor(p.y)}`));
+      game.items = placeItems(rng);
+      resetRunState();
+      seedInput.value = game.seed;
+      mazeWInput.value = game.mazeCellsWide;
+      mazeHInput.value = game.mazeCellsHigh;
+      showToast("迷路を生成した");
+    }
+
+    function regenerateSameMaze() {
+      const seed = game.seed;
+      const width = game.mazeCellsWide;
+      const height = game.mazeCellsHigh;
+      generateMaze({ seed, width, height });
+    }
+
+    function loadMazeState(state) {
+      if (!state || state.version !== 2) throw new Error("対応していない保存形式です");
+      if (!Array.isArray(state.grid) || state.grid.length < 3 || !Array.isArray(state.grid[0])) throw new Error("gridが不正です");
+      const gridWidth = state.grid[0].length;
+      if (!state.grid.every((row) => Array.isArray(row) && row.length === gridWidth && row.every((v) => v === 0 || v === 1))) {
+        throw new Error("gridの内容が不正です");
+      }
+
+      game.seed = String(state.seed || randomSeed());
+      game.mazeCellsWide = normalizeOdd(state.mazeCellsWide, 17);
+      game.mazeCellsHigh = normalizeOdd(state.mazeCellsHigh, 17);
+      game.grid = state.grid.map((row) => row.slice());
+      game.gridHeight = game.grid.length;
+      game.gridWidth = game.grid[0].length;
+      game.start = state.start || { x: 1.5, y: 1.5 };
+      game.exit = state.exit || { x: game.gridWidth - 1.35, y: game.gridHeight - 1.5 };
+      game.openCells = computeOpenCells();
+      game.route = computeRoute(game.start.x, game.start.y, game.exit.x, game.exit.y);
+      game.routeSet = new Set(game.route.map((p) => `${Math.floor(p.x)},${Math.floor(p.y)}`));
+      game.items = Array.isArray(state.items) ? state.items.map((item) => ({
+        id: itemIdCounter++,
+        type: ITEM_TYPES[item.type] ? item.type : "map",
+        x: Number(item.x),
+        y: Number(item.y),
+        picked: Boolean(item.picked),
+        bob: Number.isFinite(item.bob) ? item.bob : 0
+      })).filter((item) => Number.isFinite(item.x) && Number.isFinite(item.y)) : [];
+      resetRunState();
+      seedInput.value = game.seed;
+      mazeWInput.value = game.mazeCellsWide;
+      mazeHInput.value = game.mazeCellsHigh;
+    }
+
+    function serializeMaze() {
+      return {
+        version: 2,
+        savedAt: new Date().toISOString(),
+        seed: game.seed,
+        mazeCellsWide: game.mazeCellsWide,
+        mazeCellsHigh: game.mazeCellsHigh,
+        grid: game.grid,
+        start: game.start,
+        exit: game.exit,
+        items: game.items.map((item) => ({
+          type: item.type,
+          x: item.x,
+          y: item.y,
+          picked: item.picked,
+          bob: item.bob
+        }))
+      };
+    }
+
+    function saveMazeToLocalStorage() {
+      localStorage.setItem(SAVE_KEY, JSON.stringify(serializeMaze()));
+      showToast("迷路をブラウザに保存した");
+    }
+
+    function loadMazeFromLocalStorage() {
+      const raw = localStorage.getItem(SAVE_KEY);
+      if (!raw) {
+        showToast("保存された迷路がない");
+        return;
+      }
+      try {
+        loadMazeState(JSON.parse(raw));
+        showToast("保存迷路をロードした");
+      } catch (error) {
+        showToast(`ロード失敗: ${error.message}`);
+      }
+    }
+
+    function exportMazeJson() {
+      const json = JSON.stringify(serializeMaze(), null, 2);
+      const blob = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `rainbow-maze-${game.seed}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      showToast("JSONを書き出した");
+    }
+
+    function isWallAt(x, y) {
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return true;
+      const gx = Math.floor(x);
+      const gy = Math.floor(y);
+      if (gx < 0 || gy < 0 || gx >= game.gridWidth || gy >= game.gridHeight) return true;
+      return game.grid[gy][gx] === 1;
+    }
+
+    function canOccupy(x, y) {
+      const r = game.player.radius;
+      return !isWallAt(x - r, y - r) && !isWallAt(x + r, y - r) && !isWallAt(x - r, y + r) && !isWallAt(x + r, y + r);
+    }
+
+    function movePlayer(dx, dy) {
+      if (game.effects.phase > 0) {
+        game.player.x = clamp(game.player.x + dx, 0.15, game.gridWidth - 0.15);
+        game.player.y = clamp(game.player.y + dy, 0.15, game.gridHeight - 0.15);
+        return;
+      }
+
+      const nextX = game.player.x + dx;
+      const nextY = game.player.y + dy;
+      if (canOccupy(nextX, game.player.y)) game.player.x = nextX;
+      if (canOccupy(game.player.x, nextY)) game.player.y = nextY;
+    }
+
+    function normalizeAngle(angle) {
+      const tau = Math.PI * 2;
+      angle %= tau;
+      if (angle < 0) angle += tau;
+      return angle;
+    }
+
+    function addItemToInventory(type) {
+      if (!ITEM_TYPES[type]) return false;
+      const emptyIndex = game.inventory.findIndex((item) => item === null);
+      if (emptyIndex === -1) return false;
+      game.inventory[emptyIndex] = type;
+      updateInventoryUi();
+      showToast(`${ITEM_TYPES[type].label}を入手した`);
+      return true;
+    }
+
+    function replaceInventorySlot(slotIndex, type) {
+      if (!ITEM_TYPES[type] || slotIndex < 0 || slotIndex > 2) return;
+      game.inventory[slotIndex] = type;
+      if (game.replacementCandidate) {
+        game.replacementCandidate.picked = true;
+        game.replacementCandidate = null;
+      }
+      updateInventoryUi();
+      showToast(`${slotIndex + 1}番スロットに${ITEM_TYPES[type].label}を入れた`);
+    }
+
+    function getRandomDifferentItem(excludeType) {
+      const types = Object.keys(ITEM_TYPES).filter((type) => type !== excludeType && type !== "reroll");
+      const rng = createRng(`${game.seed}:reroll:${performance.now()}:${Math.random()}`);
+      return types[rngInt(rng, types.length)];
+    }
+
+    function useInventorySlot(slotIndex) {
+      if (game.won || game.gameOver || slotIndex < 0 || slotIndex > 2) return;
+
+      if (game.replacementCandidate) {
+        replaceInventorySlot(slotIndex, game.replacementCandidate.type);
+        return;
+      }
+
+      const type = game.inventory[slotIndex];
+      if (type == null || !ITEM_TYPES[type]) {
+        showToast(`${slotIndex + 1}番スロットは空`);
+        return;
+      }
+
+      game.inventory[slotIndex] = null;
+      game.itemsUsed++;
+      const meta = ITEM_TYPES[type];
+
+      if (type === "map") {
+        game.effects.map = Math.max(game.effects.map, meta.duration);
+        showToast("地図を10秒表示");
+      } else if (type === "xray") {
+        game.effects.xray = Math.max(game.effects.xray, meta.duration);
+        showToast("透視を発動。壁の不透明度が30%になる");
+      } else if (type === "speed") {
+        game.effects.speed = Math.max(game.effects.speed, meta.duration);
+        showToast("加速を発動");
+      } else if (type === "phase") {
+        game.effects.phase = Math.max(game.effects.phase, meta.duration);
+        game.wallPhaseUses++;
+        showToast("壁抜けを発動。解除位置に注意");
+      } else if (type === "compass") {
+        game.effects.compass = Math.max(game.effects.compass, meta.duration);
+        showToast("コンパスを発動");
+      } else if (type === "sonar") {
+        fireSonar();
+        showToast("ソナーを発動");
+      } else if (type === "hawkeye") {
+        game.effects.hawkeye = Math.max(game.effects.hawkeye, meta.duration);
+        showToast("ホークアイを発動。自分中心の上空視点を表示");
+      } else if (type === "reroll") {
+        const newType = getRandomDifferentItem(type);
+        game.inventory[slotIndex] = newType;
+        showToast(`リロール: ${ITEM_TYPES[newType].label}に変化`);
+      }
+
+      updateInventoryUi();
+    }
+
+    function fireSonar() {
+      game.sonarPulses.push({ start: performance.now(), duration: ITEM_TYPES.sonar.duration, maxRadius: 15 });
+    }
+
+    function updateInventoryUi() {
+      for (let i = 0; i < 3; i++) {
+        const slotEl = document.getElementById(`slot${i}`);
+        const nameEl = slotEl.querySelector(".slotName");
+        const hintEl = slotEl.querySelector(".slotHint");
+        const type = game.inventory[i];
+        if (type == null || !ITEM_TYPES[type]) {
+          slotEl.style.borderColor = "rgba(255, 255, 255, 0.22)";
+          slotEl.style.boxShadow = "inset 0 0 18px rgba(255,255,255,0.04), 0 0 18px rgba(0,0,0,0.4)";
+          nameEl.textContent = "EMPTY";
+          nameEl.style.color = "rgba(255, 255, 255, 0.45)";
+          hintEl.textContent = "---";
+        } else {
+          const meta = ITEM_TYPES[type];
+          slotEl.style.borderColor = meta.color;
+          slotEl.style.boxShadow = `inset 0 0 18px ${hexToRgba(meta.color, 0.16)}, 0 0 18px ${hexToRgba(meta.color, 0.2)}`;
+          nameEl.textContent = meta.label;
+          nameEl.style.color = meta.color;
+          hintEl.textContent = meta.description;
+        }
+      }
+    }
+
+    function hexToRgba(hex, alpha) {
+      const clean = hex.replace("#", "");
+      const r = Number.parseInt(clean.slice(0, 2), 16);
+      const g = Number.parseInt(clean.slice(2, 4), 16);
+      const b = Number.parseInt(clean.slice(4, 6), 16);
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+
+    function updateEffectsUi() {
+      const badges = [];
+      for (const [key, value] of Object.entries(game.effects)) {
+        if (value > 0.02) {
+          const label = key === "map" ? "地図" : key === "xray" ? "透視" : key === "speed" ? "加速" : key === "phase" ? "壁抜け" : key === "compass" ? "コンパス" : "ホークアイ";
+          const color = key === "map" ? ITEM_TYPES.map.color : key === "xray" ? ITEM_TYPES.xray.color : key === "speed" ? ITEM_TYPES.speed.color : key === "phase" ? ITEM_TYPES.phase.color : key === "compass" ? ITEM_TYPES.compass.color : ITEM_TYPES.hawkeye.color;
+          badges.push(`<div class="effectBadge" style="color:${color};border-color:${hexToRgba(color, 0.42)}">${label}: ${value.toFixed(1)}s</div>`);
+        }
+      }
+      if (game.debug.map) badges.push(`<div class="effectBadge" style="color:#fff">DEBUG MAP</div>`);
+      if (game.debug.route) badges.push(`<div class="effectBadge" style="color:#7cff7c">ROUTE</div>`);
+      effectsEl.innerHTML = badges.join("");
+    }
+
+    function showToast(text) {
+      toastEl.textContent = text;
+      toastEl.classList.add("visible");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(hideToast, 2200);
+    }
+
+    function hideToast() {
+      toastEl.classList.remove("visible");
+    }
+
+    function updatePickup() {
+      if (game.won || game.gameOver) return;
+      let nearest = null;
+      let nearestDistance = Infinity;
+      for (const item of game.items) {
+        if (item.picked) continue;
+        const d = Math.hypot(item.x - game.player.x, item.y - game.player.y);
+        if (d < nearestDistance) {
+          nearest = item;
+          nearestDistance = d;
+        }
+      }
+
+      if (nearest && nearestDistance < 0.62) {
+        if (game.inventory.some((item) => item === null)) {
+          nearest.picked = true;
+          addItemToInventory(nearest.type);
+          pickupText.textContent = "";
+          game.replacementCandidate = null;
+        } else {
+          game.replacementCandidate = nearest;
+          pickupText.textContent = `${ITEM_TYPES[nearest.type].label}を拾うには 1/2/3 で入替`;
+        }
+      } else {
+        game.replacementCandidate = null;
+        pickupText.textContent = "";
+      }
+    }
+
+    function update(dt) {
+      if (game.won || game.gameOverSequence) return;
+
+      const oldPhase = game.effects.phase;
+      for (const key of Object.keys(game.effects)) {
+        game.effects[key] = Math.max(0, game.effects[key] - dt);
+      }
+
+      if (oldPhase > 0 && game.effects.phase <= 0 && !canOccupy(game.player.x, game.player.y)) {
+        triggerStoneGameOver();
+        return;
+      }
+
+      const targetHawkeye = game.effects.hawkeye > 0 ? 1 : 0;
+      const blendSpeed = 4;
+      game.hawkeyeBlend = clamp(game.hawkeyeBlend + (targetHawkeye - game.hawkeyeBlend) * clamp(dt * blendSpeed, 0, 1), 0, 1);
+
+      game.sonarPulses = game.sonarPulses.filter((pulse) => (performance.now() - pulse.start) / 1000 < pulse.duration);
+
+      const speedMultiplier = (keys.has("ShiftLeft") || keys.has("ShiftRight") ? 1.45 : 1) * (game.effects.speed > 0 ? 1.85 : 1);
+      const moveSpeed = 3.1 * speedMultiplier;
+      const turnSpeed = 2.55;
+      let moveX = 0;
+      let moveY = 0;
+
+      if (keys.has("KeyQ") || keys.has("ArrowLeft")) game.player.angle -= turnSpeed * dt;
+      if (keys.has("KeyE") || keys.has("ArrowRight")) game.player.angle += turnSpeed * dt;
+
+      if (keys.has("KeyW") || keys.has("ArrowUp")) {
+        moveX += Math.cos(game.player.angle) * moveSpeed * dt;
+        moveY += Math.sin(game.player.angle) * moveSpeed * dt;
+      }
+      if (keys.has("KeyS") || keys.has("ArrowDown")) {
+        moveX -= Math.cos(game.player.angle) * moveSpeed * dt;
+        moveY -= Math.sin(game.player.angle) * moveSpeed * dt;
+      }
+      if (keys.has("KeyA")) {
+        moveX += Math.cos(game.player.angle - Math.PI / 2) * moveSpeed * dt;
+        moveY += Math.sin(game.player.angle - Math.PI / 2) * moveSpeed * dt;
+      }
+      if (keys.has("KeyD")) {
+        moveX += Math.cos(game.player.angle + Math.PI / 2) * moveSpeed * dt;
+        moveY += Math.sin(game.player.angle + Math.PI / 2) * moveSpeed * dt;
+      }
+
+      game.player.angle = normalizeAngle(game.player.angle);
+      movePlayer(moveX, moveY);
+
+      const moved = Math.hypot(game.player.x - game.lastPlayerX, game.player.y - game.lastPlayerY);
+      game.totalDistance += moved;
+      game.lastPlayerX = game.player.x;
+      game.lastPlayerY = game.player.y;
+
+      updatePickup();
+
+      const exitDistance = Math.hypot(game.exit.x - game.player.x, game.exit.y - game.player.y);
+      if (exitDistance < 0.6) {
+        triggerClear();
+      }
+    }
+
+    function triggerStoneGameOver() {
+      game.gameOverSequence = true;
+      keys.clear();
+      showMessage("＊おおっと＊", "", true);
+      setTimeout(() => {
+        showMessage("＊いしのなかにいる！＊", "", true);
+      }, 1300);
+      setTimeout(() => {
+        game.gameOver = true;
+        game.gameOverSequence = false;
+        showResult(false);
+      }, 2800);
+    }
+
+    function triggerClear() {
+      game.won = true;
+      showResult(true);
+    }
+
+    function showMessage(title, body, danger = false) {
+      bigMessage.textContent = title;
+      bigMessage.classList.toggle("danger", danger);
+      subMessage.textContent = body;
+      messageOverlay.classList.add("visible");
+      document.exitPointerLock?.();
+    }
+
+    function buildResultText(clear) {
+      const elapsed = (performance.now() - game.startedAt) / 1000;
+      const minutes = Math.floor(elapsed / 60);
+      const seconds = (elapsed % 60).toFixed(2).padStart(5, "0");
+      const rankScore = elapsed + game.itemsUsed * 8 + game.wallPhaseUses * 10 + game.totalDistance * 0.35;
+      const rank = !clear ? "---" : rankScore < 120 ? "S" : rankScore < 220 ? "A" : rankScore < 360 ? "B" : rankScore < 560 ? "C" : "D";
+      return [
+        `Time: ${minutes}:${seconds}`,
+        `Items Used: ${game.itemsUsed}`,
+        `Distance: ${game.totalDistance.toFixed(1)}`,
+        `Wall Phase Uses: ${game.wallPhaseUses}`,
+        `Maze: ${game.mazeCellsWide} x ${game.mazeCellsHigh}`,
+        `Seed: ${game.seed}`,
+        `Rank: ${rank}`
+      ].join("\n");
+    }
+
+    function showResult(clear) {
+      bigMessage.textContent = clear ? "CLEAR" : "GAME OVER";
+      bigMessage.classList.toggle("danger", !clear);
+      subMessage.textContent = buildResultText(clear);
+      messageOverlay.classList.add("visible");
+      document.exitPointerLock?.();
+    }
+
+    function castRay(angle) {
+      const px = game.player.x;
+      const py = game.player.y;
+      const rayDirX = Math.cos(angle);
+      const rayDirY = Math.sin(angle);
+      let mapX = Math.floor(px);
+      let mapY = Math.floor(py);
+
+      const deltaDistX = Math.abs(1 / (rayDirX || 0.000001));
+      const deltaDistY = Math.abs(1 / (rayDirY || 0.000001));
+      let stepX;
+      let stepY;
+      let sideDistX;
+      let sideDistY;
+
+      if (rayDirX < 0) {
+        stepX = -1;
+        sideDistX = (px - mapX) * deltaDistX;
+      } else {
+        stepX = 1;
+        sideDistX = (mapX + 1 - px) * deltaDistX;
+      }
+
+      if (rayDirY < 0) {
+        stepY = -1;
+        sideDistY = (py - mapY) * deltaDistY;
+      } else {
+        stepY = 1;
+        sideDistY = (mapY + 1 - py) * deltaDistY;
+      }
+
+      let side = 0;
+      let hit = false;
+      let steps = 0;
+
+      while (!hit && steps < 160) {
+        if (sideDistX < sideDistY) {
+          sideDistX += deltaDistX;
+          mapX += stepX;
+          side = 0;
+        } else {
+          sideDistY += deltaDistY;
+          mapY += stepY;
+          side = 1;
+        }
+
+        if (mapX < 0 || mapY < 0 || mapX >= game.gridWidth || mapY >= game.gridHeight) {
+          hit = true;
+        } else if (game.grid[mapY][mapX] === 1) {
+          hit = true;
+        }
+        steps++;
+      }
+
+      let distance = side === 0 ? sideDistX - deltaDistX : sideDistY - deltaDistY;
+      distance = Math.max(0.0001, distance);
+      const hitX = px + rayDirX * distance;
+      const hitY = py + rayDirY * distance;
+      return { distance, side, hitX, hitY, mapX, mapY };
+    }
+
+    function drawBackground(width, height, time, hawkeyeBlend = 0) {
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, width, height);
+      const horizon = height * (0.5 + hawkeyeBlend * 0.32);
+
+      ctx.globalAlpha = 0.42;
+      for (let i = 0; i < 34; i++) {
+        const y = horizon + i * i * 0.45;
+        const hue = (time * 0.035 + i * 12) % 360;
+        ctx.strokeStyle = `hsla(${hue}, 100%, 52%, ${0.12 / (1 + i * 0.055)})`;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(width, y);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    function drawScene(time) {
+      const width = canvas.width;
+      const height = canvas.height;
+      const rayStep = game.rayStep;
+      const xrayActive = game.effects.xray > 0;
+      const hawkeyeBlend = clamp(game.hawkeyeBlend, 0, 1);
+      if (hawkeyeBlend > 0.02) {
+        drawHawkeyeTopDown(time, hawkeyeBlend);
+        return;
+      }
+      const centerY = height * 0.55;
+      const wallScale = 1.08;
+      const pitch = 0;
+
+      drawBackground(width, height, time, 0);
+
+      for (let x = 0; x < width; x += rayStep) {
+        const cameraX = (2 * x / width) - 1;
+        const rayAngle = game.player.angle + Math.atan(cameraX * Math.tan(game.fov / 2));
+        const ray = castRay(rayAngle);
+        const correctedDistance = Math.max(0.0001, ray.distance * Math.cos(rayAngle - game.player.angle));
+        const rawWallHeight = Math.min(height * 4, height / correctedDistance * wallScale);
+        const distanceNorm = clamp(correctedDistance / 14, 0, 1);
+        const pitchOffset = Math.sin(pitch) * height * 0.34 * (1 - distanceNorm);
+        const lineTop = centerY - rawWallHeight / 2 + pitchOffset;
+        const lineBottom = centerY + rawWallHeight / 2 + pitchOffset;
+        const fog = Math.max(0, 1 - correctedDistance / game.maxDepth);
+        const shimmer = Math.sin(time * 0.003 + x * 0.014 + ray.hitX * 1.7 + ray.hitY * 2.1) * 0.5 + 0.5;
+        const hue = (ray.mapX * 17 + ray.mapY * 31 + x * 0.08 + time * 0.025) % 360;
+        const lightness = 17 + fog * 58 + shimmer * 12;
+        const baseAlpha = Math.min(1, 0.08 + fog * 0.92);
+        const alpha = xrayActive ? Math.min(0.3, baseAlpha * 0.3) : baseAlpha;
+        const sideShade = ray.side === 1 ? 0.72 : 1;
+        const strokeWidth = Math.max(rayStep, Math.min(5, rayStep + fog * 2.5 + hawkeyeBlend * 1.8));
+
+        ctx.lineWidth = strokeWidth;
+        ctx.strokeStyle = `hsla(${hue}, 100%, ${lightness * sideShade}%, ${alpha})`;
+        ctx.beginPath();
+        ctx.moveTo(x + 0.5, lineTop);
+        ctx.lineTo(x + 0.5, lineBottom);
+        ctx.stroke();
+
+        if (hawkeyeBlend > 0) {
+          ctx.strokeStyle = `hsla(${(hue + 64) % 360}, 100%, ${76 + fog * 8}%, ${hawkeyeBlend * 0.18})`;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(x + 0.5, lineTop + (lineBottom - lineTop) * 0.42);
+          ctx.lineTo(x + 0.5, lineTop + (lineBottom - lineTop) * 0.58);
+          ctx.stroke();
+        }
+
+        if (!xrayActive && fog > 0.72) {
+          ctx.strokeStyle = `hsla(${(hue + 48) % 360}, 100%, 72%, ${0.1 * fog})`;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(x + 0.5, lineTop);
+          ctx.lineTo(x + 0.5, lineBottom);
+          ctx.stroke();
+        }
+      }
+
+      drawRoute3d(time);
+      drawItems3d(time);
+      drawExitBeacon(time);
+      drawCompass(time);
+      drawSonarOverlay(time);
+      if (game.effects.map > 0 || game.debug.map) drawMiniMap(time);
+      if (game.debug.coords) drawDebugText();
+    }
+
+    function relativeAngleTo(x, y) {
+      const angle = Math.atan2(y - game.player.y, x - game.player.x);
+      let relative = angle - game.player.angle;
+      while (relative < -Math.PI) relative += Math.PI * 2;
+      while (relative > Math.PI) relative -= Math.PI * 2;
+      return relative;
+    }
+
+    function worldToScreen(x, y, verticalOffset = 0) {
+      const dx = x - game.player.x;
+      const dy = y - game.player.y;
+      const dist = Math.hypot(dx, dy);
+      const relative = relativeAngleTo(x, y);
+      if (Math.abs(relative) > game.fov * 0.62 || dist < 0.08) return null;
+      const screenX = canvas.width * 0.5 + Math.tan(relative) / Math.tan(game.fov / 2) * canvas.width * 0.5;
+      const size = canvas.height / Math.max(0.1, dist);
+      const screenY = canvas.height * 0.5 + size * verticalOffset;
+      return { x: screenX, y: screenY, dist, size, relative };
+    }
+
+    function hasLineOfSight(x0, y0, x1, y1) {
+      const dx = x1 - x0;
+      const dy = y1 - y0;
+      const dist = Math.hypot(dx, dy);
+      const steps = Math.max(2, Math.ceil(dist * 10));
+      for (let i = 1; i < steps; i++) {
+        const t = i / steps;
+        const x = x0 + dx * t;
+        const y = y0 + dy * t;
+        if (isWallAt(x, y)) return false;
+      }
+      return true;
+    }
+
+    function isRevealedBySonar(x, y) {
+      const now = performance.now();
+      for (const pulse of game.sonarPulses) {
+        const t = (now - pulse.start) / 1000;
+        const radius = (t / pulse.duration) * pulse.maxRadius;
+        const dist = Math.hypot(x - game.player.x, y - game.player.y);
+        if (Math.abs(dist - radius) < 1.2 || dist < radius * 0.28) return true;
+      }
+      return false;
+    }
+
+
+    function drawHawkeyeTopDown(time, alpha = 1) {
+      const width = canvas.width;
+      const height = canvas.height;
+      const dprScale = canvas.width / Math.max(1, window.innerWidth);
+      const viewCells = clamp(Math.min(game.gridWidth, game.gridHeight) * 0.62, 18, 30);
+      const scale = Math.min(width, height) / viewCells;
+      const centerX = width * 0.5;
+      const centerY = height * 0.5;
+      const rot = -game.player.angle - Math.PI / 2;
+      const cos = Math.cos(rot);
+      const sin = Math.sin(rot);
+      const visibleRadius = viewCells * 0.72;
+
+      function project(wx, wy) {
+        const dx = wx - game.player.x;
+        const dy = wy - game.player.y;
+        return {
+          x: centerX + (dx * cos - dy * sin) * scale,
+          y: centerY + (dx * sin + dy * cos) * scale,
+          dist: Math.hypot(dx, dy)
+        };
+      }
+
+      function drawCell(gx, gy, fillStyle, strokeStyle, lineWidth = 1) {
+        const p1 = project(gx, gy);
+        const p2 = project(gx + 1, gy);
+        const p3 = project(gx + 1, gy + 1);
+        const p4 = project(gx, gy + 1);
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.lineTo(p3.x, p3.y);
+        ctx.lineTo(p4.x, p4.y);
+        ctx.closePath();
+        if (fillStyle) {
+          ctx.fillStyle = fillStyle;
+          ctx.fill();
+        }
+        if (strokeStyle) {
+          ctx.lineWidth = lineWidth;
+          ctx.strokeStyle = strokeStyle;
+          ctx.stroke();
+        }
+      }
+
+      ctx.save();
+      ctx.globalAlpha = clamp(alpha, 0, 1);
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, width, height);
+
+      const vignette = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, Math.max(width, height) * 0.62);
+      vignette.addColorStop(0, 'rgba(255, 216, 107, 0.08)');
+      vignette.addColorStop(0.62, 'rgba(0, 0, 0, 0.16)');
+      vignette.addColorStop(1, 'rgba(0, 0, 0, 0.95)');
+      ctx.fillStyle = vignette;
+      ctx.fillRect(0, 0, width, height);
+
+      const minX = clamp(Math.floor(game.player.x - visibleRadius), 0, game.gridWidth - 1);
+      const maxX = clamp(Math.ceil(game.player.x + visibleRadius), 0, game.gridWidth - 1);
+      const minY = clamp(Math.floor(game.player.y - visibleRadius), 0, game.gridHeight - 1);
+      const maxY = clamp(Math.ceil(game.player.y + visibleRadius), 0, game.gridHeight - 1);
+
+      for (let y = minY; y <= maxY; y++) {
+        for (let x = minX; x <= maxX; x++) {
+          const cx = x + 0.5;
+          const cy = y + 0.5;
+          const dist = Math.hypot(cx - game.player.x, cy - game.player.y);
+          if (dist > visibleRadius) continue;
+          const fade = clamp(1 - dist / visibleRadius, 0, 1);
+          if (game.grid[y][x] === 1) {
+            const hue = (x * 17 + y * 29 + time * 0.035) % 360;
+            drawCell(
+              x,
+              y,
+              `hsla(${hue}, 100%, ${38 + fade * 22}%, ${0.12 + fade * 0.30})`,
+              `hsla(${(hue + 44) % 360}, 100%, ${58 + fade * 18}%, ${0.25 + fade * 0.48})`,
+              Math.max(1, 1.2 * dprScale)
+            );
+          } else {
+            drawCell(
+              x,
+              y,
+              `rgba(255, 255, 255, ${0.012 + fade * 0.024})`,
+              `rgba(255, 255, 255, ${0.035 + fade * 0.055})`,
+              Math.max(0.5, 0.75 * dprScale)
+            );
+          }
+        }
+      }
+
+      if (game.debug.route && Array.isArray(game.route) && game.route.length > 0) {
+        ctx.save();
+        ctx.lineWidth = Math.max(2, 2.6 * dprScale);
+        ctx.strokeStyle = 'rgba(90, 255, 130, 0.78)';
+        ctx.shadowBlur = 16;
+        ctx.shadowColor = 'rgba(90, 255, 130, 0.85)';
+        ctx.beginPath();
+        let started = false;
+        for (const p of game.route) {
+          const projected = project(p.x, p.y);
+          if (projected.dist > visibleRadius) continue;
+          if (!started) {
+            ctx.moveTo(projected.x, projected.y);
+            started = true;
+          } else {
+            ctx.lineTo(projected.x, projected.y);
+          }
+        }
+        if (started) ctx.stroke();
+        ctx.restore();
+      }
+
+      for (const item of game.items) {
+        if (item.picked) continue;
+        const projected = project(item.x, item.y);
+        if (projected.dist > visibleRadius) continue;
+        const meta = ITEM_TYPES[item.type] || ITEM_TYPES.map;
+        const r = clamp(scale * 0.18, 5 * dprScale, 14 * dprScale);
+        ctx.save();
+        ctx.globalAlpha = clamp(1 - projected.dist / visibleRadius, 0.28, 0.94);
+        ctx.shadowBlur = 18;
+        ctx.shadowColor = meta.color;
+        ctx.strokeStyle = meta.color;
+        ctx.lineWidth = Math.max(2, 2 * dprScale);
+        ctx.beginPath();
+        ctx.arc(projected.x, projected.y, r, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = meta.color;
+        ctx.beginPath();
+        ctx.arc(projected.x, projected.y, r * 0.34, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      const exitProjected = project(game.exit.x, game.exit.y);
+      if (exitProjected.dist <= visibleRadius) {
+        const hue = (time * 0.08) % 360;
+        ctx.save();
+        ctx.shadowBlur = 34;
+        ctx.shadowColor = `hsl(${hue}, 100%, 66%)`;
+        ctx.strokeStyle = `hsla(${hue}, 100%, 66%, 0.92)`;
+        ctx.lineWidth = Math.max(3, 3 * dprScale);
+        ctx.beginPath();
+        ctx.arc(exitProjected.x, exitProjected.y, clamp(scale * 0.36, 10 * dprScale, 28 * dprScale), 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(exitProjected.x, exitProjected.y - scale * 0.58);
+        ctx.lineTo(exitProjected.x, exitProjected.y + scale * 0.58);
+        ctx.moveTo(exitProjected.x - scale * 0.58, exitProjected.y);
+        ctx.lineTo(exitProjected.x + scale * 0.58, exitProjected.y);
+        ctx.stroke();
+        ctx.restore();
+      } else {
+        const angleToExit = Math.atan2(game.exit.y - game.player.y, game.exit.x - game.player.x);
+        let relative = angleToExit - game.player.angle;
+        while (relative < -Math.PI) relative += Math.PI * 2;
+        while (relative > Math.PI) relative -= Math.PI * 2;
+        ctx.save();
+        ctx.translate(centerX, centerY);
+        ctx.rotate(relative);
+        ctx.shadowBlur = 22;
+        ctx.shadowColor = 'rgba(255, 216, 107, 0.9)';
+        ctx.fillStyle = 'rgba(255, 216, 107, 0.92)';
+        ctx.beginPath();
+        ctx.moveTo(0, -Math.min(width, height) * 0.43);
+        ctx.lineTo(-9 * dprScale, -Math.min(width, height) * 0.39);
+        ctx.lineTo(9 * dprScale, -Math.min(width, height) * 0.39);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+
+      ctx.save();
+      ctx.translate(centerX, centerY);
+      ctx.shadowBlur = 20;
+      ctx.shadowColor = 'rgba(255, 255, 255, 0.9)';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+      ctx.beginPath();
+      ctx.moveTo(0, -16 * dprScale);
+      ctx.lineTo(11 * dprScale, 13 * dprScale);
+      ctx.lineTo(0, 7 * dprScale);
+      ctx.lineTo(-11 * dprScale, 13 * dprScale);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+
+      ctx.save();
+      ctx.font = `${Math.max(13, 13 * dprScale)}px system-ui, sans-serif`;
+      ctx.fillStyle = 'rgba(255, 216, 107, 0.86)';
+      ctx.shadowBlur = 12;
+      ctx.shadowColor = 'rgba(255, 216, 107, 0.75)';
+      ctx.fillText('HAWKEYE / TOP-DOWN', 18 * dprScale, height - 22 * dprScale);
+      ctx.restore();
+
+      if (game.debug.coords) drawDebugText();
+      ctx.restore();
+    }
+
+    function drawItems3d(time) {
+      const visibleItems = game.items
+        .filter((item) => !item.picked)
+        .map((item) => ({ item, projection: worldToScreen(item.x, item.y, 0.15 + Math.sin(time * 0.004 + item.bob) * 0.025) }))
+        .filter((entry) => entry.projection)
+        .sort((a, b) => b.projection.dist - a.projection.dist);
+
+      for (const { item, projection } of visibleItems) {
+        const los = hasLineOfSight(game.player.x, game.player.y, item.x, item.y);
+        const reveal = game.effects.xray > 0 || isRevealedBySonar(item.x, item.y);
+        if (!los && !reveal) continue;
+        const meta = ITEM_TYPES[item.type];
+        const radius = clamp(projection.size * 0.08, 6, 30);
+        const alpha = los ? 0.95 : 0.42;
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.shadowBlur = radius * 1.7;
+        ctx.shadowColor = meta.color;
+        ctx.strokeStyle = meta.color;
+        ctx.lineWidth = Math.max(2, radius * 0.16);
+        ctx.beginPath();
+        ctx.arc(projection.x, projection.y, radius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(projection.x, projection.y, radius * 0.38, 0, Math.PI * 2);
+        ctx.fillStyle = meta.color;
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    function drawExitBeacon(time) {
+      const projection = worldToScreen(game.exit.x, game.exit.y, 0);
+      const angle = relativeAngleTo(game.exit.x, game.exit.y);
+      const los = hasLineOfSight(game.player.x, game.player.y, game.exit.x, game.exit.y);
+      const hue = (time * 0.08) % 360;
+
+      if (projection) {
+        const pulse = Math.sin(time * 0.006) * 0.5 + 0.5;
+        const beaconHeight = clamp(projection.size * 1.4, canvas.height * 0.2, canvas.height * 1.2);
+        const top = canvas.height * 0.5 - beaconHeight * 0.62;
+        const bottom = canvas.height;
+        ctx.save();
+        ctx.lineCap = "round";
+        ctx.shadowBlur = los ? 45 + pulse * 42 : 24 + pulse * 24;
+        ctx.shadowColor = `hsl(${hue}, 100%, 62%)`;
+        ctx.strokeStyle = `hsla(${hue}, 100%, ${los ? 70 : 54}%, ${los ? 0.85 : 0.34})`;
+        ctx.lineWidth = clamp(38 / Math.max(1, projection.dist), 5, 34);
+        ctx.beginPath();
+        ctx.moveTo(projection.x, top);
+        ctx.lineTo(projection.x, bottom);
+        ctx.stroke();
+
+        const gradient = ctx.createRadialGradient(projection.x, top, 0, projection.x, top, clamp(projection.size * 0.5, 40, 260));
+        gradient.addColorStop(0, `hsla(${hue}, 100%, 74%, ${los ? 0.44 : 0.2})`);
+        gradient.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.restore();
+      }
+
+      if (Math.abs(angle) > game.fov * 0.55) {
+        const edgeX = angle > 0 ? canvas.width - 42 : 42;
+        const edgeY = canvas.height * 0.5;
+        ctx.save();
+        ctx.translate(edgeX, edgeY);
+        ctx.rotate(angle > 0 ? 0 : Math.PI);
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = `hsl(${hue}, 100%, 62%)`;
+        ctx.fillStyle = `hsla(${hue}, 100%, 62%, 0.78)`;
+        ctx.beginPath();
+        ctx.moveTo(18, 0);
+        ctx.lineTo(-12, -16);
+        ctx.lineTo(-6, 0);
+        ctx.lineTo(-12, 16);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    function drawCompass(time) {
+      if (game.effects.compass <= 0) return;
+      const angle = relativeAngleTo(game.exit.x, game.exit.y);
+      const centerX = canvas.width * 0.5;
+      const y = 74 * (canvas.width / Math.max(1, window.innerWidth));
+      const hue = (time * 0.09 + 120) % 360;
+      const x = centerX + clamp(angle / (Math.PI / 2), -1, 1) * canvas.width * 0.35;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(angle);
+      ctx.shadowBlur = 18;
+      ctx.shadowColor = `hsl(${hue}, 100%, 65%)`;
+      ctx.fillStyle = `hsla(${hue}, 100%, 65%, 0.9)`;
+      ctx.beginPath();
+      ctx.moveTo(0, -20);
+      ctx.lineTo(12, 12);
+      ctx.lineTo(0, 5);
+      ctx.lineTo(-12, 12);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function drawRoute3d(time) {
+      if (!game.debug.route) return;
+      ctx.save();
+      for (let i = 0; i < game.route.length; i += 2) {
+        const p = game.route[i];
+        const projection = worldToScreen(p.x, p.y, 0.32);
+        if (!projection || projection.dist > 15) continue;
+        const radius = clamp(projection.size * 0.025, 2, 9);
+        const alpha = hasLineOfSight(game.player.x, game.player.y, p.x, p.y) ? 0.72 : 0.24;
+        const hue = (120 + i * 2 + time * 0.04) % 360;
+        ctx.globalAlpha = alpha;
+        ctx.shadowBlur = 12;
+        ctx.shadowColor = `hsl(${hue}, 100%, 65%)`;
+        ctx.fillStyle = `hsl(${hue}, 100%, 65%)`;
+        ctx.beginPath();
+        ctx.arc(projection.x, projection.y, radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    function drawSonarOverlay(time) {
+      const now = performance.now();
+      for (const pulse of game.sonarPulses) {
+        const t = (now - pulse.start) / 1000;
+        const progress = clamp(t / pulse.duration, 0, 1);
+        const radius = progress * Math.max(canvas.width, canvas.height) * 0.75;
+        ctx.save();
+        ctx.globalAlpha = (1 - progress) * 0.32;
+        ctx.strokeStyle = `hsla(${(time * 0.12) % 360}, 100%, 70%, 1)`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(canvas.width * 0.5, canvas.height * 0.5, radius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    function drawMiniMap(time) {
+      const dprScale = canvas.width / Math.max(1, window.innerWidth);
+      const mapSize = Math.min(canvas.width, canvas.height) * 0.25;
+      const padding = 18 * dprScale;
+      const cellSize = mapSize / Math.max(game.gridWidth, game.gridHeight);
+      const mapX = canvas.width - game.gridWidth * cellSize - padding;
+      const mapY = padding;
+      const isDebug = game.debug.map;
+      const visibilityRadius = game.effects.map > 0 && !isDebug ? 9999 : 9999;
+
+      ctx.save();
+      ctx.fillStyle = "rgba(0, 0, 0, 0.62)";
+      ctx.fillRect(mapX - 9 * dprScale, mapY - 9 * dprScale, game.gridWidth * cellSize + 18 * dprScale, game.gridHeight * cellSize + 18 * dprScale);
+
+      for (let y = 0; y < game.gridHeight; y++) {
+        for (let x = 0; x < game.gridWidth; x++) {
+          const dist = Math.hypot(x + 0.5 - game.player.x, y + 0.5 - game.player.y);
+          if (dist > visibilityRadius) continue;
+          if (game.grid[y][x] === 1) {
+            const hue = (x * 13 + y * 29 + time * 0.03) % 360;
+            ctx.fillStyle = `hsla(${hue}, 100%, 55%, ${isDebug ? 0.58 : 0.46})`;
+          } else {
+            ctx.fillStyle = isDebug ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.035)";
+          }
+          ctx.fillRect(mapX + x * cellSize, mapY + y * cellSize, cellSize + 0.35, cellSize + 0.35);
+        }
+      }
+
+      if (game.debug.route) {
+        ctx.strokeStyle = "rgba(90,255,130,0.82)";
+        ctx.lineWidth = Math.max(1.5, cellSize * 0.28);
+        ctx.beginPath();
+        for (let i = 0; i < game.route.length; i++) {
+          const p = game.route[i];
+          const x = mapX + p.x * cellSize;
+          const y = mapY + p.y * cellSize;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+
+      for (const item of game.items) {
+        if (item.picked) continue;
+        const meta = ITEM_TYPES[item.type];
+        ctx.fillStyle = meta.color;
+        ctx.globalAlpha = isRevealedBySonar(item.x, item.y) || isDebug || game.effects.map > 0 ? 0.9 : 0.0;
+        ctx.beginPath();
+        ctx.arc(mapX + item.x * cellSize, mapY + item.y * cellSize, Math.max(2.5 * dprScale, cellSize * 0.33), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+
+      ctx.fillStyle = `hsla(${(time * 0.1) % 360}, 100%, 68%, 0.95)`;
+      ctx.beginPath();
+      ctx.arc(mapX + game.exit.x * cellSize, mapY + game.exit.y * cellSize, Math.max(3 * dprScale, cellSize * 0.52), 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
+      ctx.beginPath();
+      ctx.arc(mapX + game.player.x * cellSize, mapY + game.player.y * cellSize, Math.max(3 * dprScale, cellSize * 0.46), 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+      ctx.lineWidth = Math.max(1.5, 1.5 * dprScale);
+      ctx.beginPath();
+      ctx.moveTo(mapX + game.player.x * cellSize, mapY + game.player.y * cellSize);
+      ctx.lineTo(mapX + (game.player.x + Math.cos(game.player.angle) * 1.5) * cellSize, mapY + (game.player.y + Math.sin(game.player.angle) * 1.5) * cellSize);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawDebugText() {
+      ctx.save();
+      const x = 16 * (canvas.width / Math.max(1, window.innerWidth));
+      const y = canvas.height - 94 * (canvas.width / Math.max(1, window.innerWidth));
+      ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
+      ctx.fillRect(x - 8, y - 24, 280, 86);
+      ctx.fillStyle = "rgba(255,255,255,0.86)";
+      ctx.font = `${13 * (canvas.width / Math.max(1, window.innerWidth))}px ui-monospace, monospace`;
+      ctx.fillText(`FPS: ${game.fps.toFixed(0)}`, x, y);
+      ctx.fillText(`POS: ${game.player.x.toFixed(2)}, ${game.player.y.toFixed(2)}`, x, y + 20);
+      ctx.fillText(`ANGLE: ${game.player.angle.toFixed(3)}`, x, y + 40);
+      ctx.fillText(`WALL: ${isWallAt(game.player.x, game.player.y) ? "YES" : "NO"}`, x, y + 60);
+      ctx.restore();
+    }
+
+    function resizeCanvas() {
+      const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+      const width = Math.floor(window.innerWidth * dpr);
+      const height = Math.floor(window.innerHeight * dpr);
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
+      }
+      game.rayStep = width > 1500 ? 2 : 1;
+    }
+
+    function updateHud() {
+      distanceText.textContent = Math.hypot(game.exit.x - game.player.x, game.exit.y - game.player.y).toFixed(1);
+      seedText.textContent = game.seed;
+      updateEffectsUi();
+      if (game.debug.coords) {
+        debugInfo.textContent = `FPS=${game.fps.toFixed(1)} / Pos=${game.player.x.toFixed(2)}, ${game.player.y.toFixed(2)} / Items=${game.items.filter((i) => !i.picked).length} / Route=${game.route.length}`;
+      } else {
+        debugInfo.textContent = `Debug Map=${game.debug.map ? "ON" : "OFF"} / Route=${game.debug.route ? "ON" : "OFF"}`;
+      }
+    }
+
+    function loop(now) {
+      resizeCanvas();
+      const dt = Math.min(0.05, (now - game.lastTime) / 1000);
+      game.lastTime = now;
+      game.fps = game.fps * 0.9 + (1 / Math.max(0.001, dt)) * 0.1;
+      update(dt);
+      drawScene(now);
+      updateHud();
+      requestAnimationFrame(loop);
+    }
+
+    function openCheatMenu() {
+      cheatOverlay.classList.add("visible");
+      document.exitPointerLock?.();
+      seedInput.value = game.seed;
+      mazeWInput.value = game.mazeCellsWide;
+      mazeHInput.value = game.mazeCellsHigh;
+      showToast("チートメニューを開いた");
+    }
+
+    function closeCheatMenu() {
+      cheatOverlay.classList.remove("visible");
+    }
+
+    function handleKonami(code) {
+      if (code === konami[konamiIndex]) {
+        konamiIndex++;
+        if (konamiIndex === konami.length) {
+          konamiIndex = 0;
+          openCheatMenu();
+        }
+      } else {
+        konamiIndex = code === konami[0] ? 1 : 0;
+      }
+    }
+
+    function requestLock() {
+      if (cheatOverlay.classList.contains("visible") || messageOverlay.classList.contains("visible")) return;
+      startOverlay.classList.remove("visible");
+      canvas.focus();
+      if (!document.pointerLockElement && canvas.requestPointerLock) {
+        canvas.requestPointerLock();
+      }
+    }
+
+    function bindEvents() {
+      window.addEventListener("resize", resizeCanvas);
+
+      canvas.addEventListener("click", requestLock);
+      document.body.addEventListener("click", (event) => {
+        if (event.target === startOverlay) requestLock();
+      });
+
+      document.addEventListener("pointerlockchange", () => {
+        pointer.locked = document.pointerLockElement === canvas;
+        if (!pointer.locked && !cheatOverlay.classList.contains("visible") && !messageOverlay.classList.contains("visible")) {
+          startOverlay.classList.add("visible");
+        } else {
+          startOverlay.classList.remove("visible");
+        }
+      });
+
+      document.addEventListener("mousemove", (event) => {
+        if (pointer.locked && !game.won && !game.gameOver) {
+          game.player.angle = normalizeAngle(game.player.angle + event.movementX * pointer.sensitivity);
+        }
+      });
+
+      window.addEventListener("keydown", (event) => {
+        handleKonami(event.code);
+
+        const activeTag = document.activeElement?.tagName?.toLowerCase();
+        const typing = activeTag === "input" || activeTag === "textarea" || activeTag === "select";
+        if (typing) return;
+
+        if (["KeyW", "KeyA", "KeyS", "KeyD", "KeyQ", "KeyE", "KeyR", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "ShiftLeft", "ShiftRight", "Digit1", "Digit2", "Digit3", "Space"].includes(event.code)) {
+          event.preventDefault();
+        }
+
+        if (event.code === "Escape") {
+          closeCheatMenu();
+          return;
+        }
+        if (event.code === "KeyR" && !cheatOverlay.classList.contains("visible")) {
+          generateMaze({ seed: randomSeed(), width: game.mazeCellsWide, height: game.mazeCellsHigh });
+          return;
+        }
+        if (event.code === "Digit1") useInventorySlot(0);
+        if (event.code === "Digit2") useInventorySlot(1);
+        if (event.code === "Digit3") useInventorySlot(2);
+
+        keys.add(event.code);
+      }, { passive: false });
+
+      window.addEventListener("keyup", (event) => {
+        keys.delete(event.code);
+      });
+
+      document.getElementById("closeCheatButton").addEventListener("click", closeCheatMenu);
+      document.getElementById("toggleDebugMapButton").addEventListener("click", () => { game.debug.map = !game.debug.map; showToast(`デバッグミニマップ ${game.debug.map ? "ON" : "OFF"}`); });
+      document.getElementById("toggleRouteButton").addEventListener("click", () => { game.debug.route = !game.debug.route; showToast(`正解ルート ${game.debug.route ? "ON" : "OFF"}`); });
+      document.getElementById("toggleCoordsButton").addEventListener("click", () => { game.debug.coords = !game.debug.coords; showToast(`座標/FPS ${game.debug.coords ? "ON" : "OFF"}`); });
+
+      document.querySelectorAll("[data-add-item]").forEach((button) => {
+        button.addEventListener("click", () => addItemToInventory(button.getAttribute("data-add-item")) || showToast("スロットが満杯"));
+      });
+      document.getElementById("addAllItemsButton").addEventListener("click", () => {
+        for (const type of ["map", "xray", "speed", "phase", "compass", "sonar", "hawkeye", "reroll"]) {
+          if (!addItemToInventory(type)) break;
+        }
+      });
+      document.getElementById("clearInventoryButton").addEventListener("click", () => { game.inventory = [null, null, null]; updateInventoryUi(); showToast("インベントリを消去した"); });
+
+      document.getElementById("giveMapEffectButton").addEventListener("click", () => { game.effects.map = 10; });
+      document.getElementById("giveXrayEffectButton").addEventListener("click", () => { game.effects.xray = 10; });
+      document.getElementById("giveSpeedEffectButton").addEventListener("click", () => { game.effects.speed = 10; });
+      document.getElementById("givePhaseEffectButton").addEventListener("click", () => { game.effects.phase = 10; });
+      document.getElementById("giveCompassEffectButton").addEventListener("click", () => { game.effects.compass = 15; });
+      document.getElementById("fireSonarButton").addEventListener("click", fireSonar);
+
+      document.getElementById("teleportStartButton").addEventListener("click", () => { game.player.x = game.start.x; game.player.y = game.start.y; showToast("スタートへ移動した"); });
+      document.getElementById("teleportExitButton").addEventListener("click", () => { game.player.x = game.exit.x - 1.2; game.player.y = game.exit.y; showToast("出口付近へ移動した"); });
+      document.getElementById("regenerateButton").addEventListener("click", regenerateSameMaze);
+      document.getElementById("newSeedButton").addEventListener("click", () => generateMaze({ seed: randomSeed(), width: game.mazeCellsWide, height: game.mazeCellsHigh }));
+      document.getElementById("retryButton").addEventListener("click", regenerateSameMaze);
+      document.getElementById("forceClearButton").addEventListener("click", triggerClear);
+      document.getElementById("generateBySeedButton").addEventListener("click", () => generateMaze({ seed: seedInput.value.trim() || randomSeed(), width: mazeWInput.value, height: mazeHInput.value }));
+
+      document.getElementById("saveMazeButton").addEventListener("click", saveMazeToLocalStorage);
+      document.getElementById("loadMazeButton").addEventListener("click", loadMazeFromLocalStorage);
+      document.getElementById("deleteSaveButton").addEventListener("click", () => { localStorage.removeItem(SAVE_KEY); showToast("保存を削除した"); });
+      document.getElementById("exportMazeButton").addEventListener("click", exportMazeJson);
+      document.getElementById("importMazeButton").addEventListener("click", () => importFileInput.click());
+      document.getElementById("copyMazeJsonButton").addEventListener("click", () => { mazeJsonText.value = JSON.stringify(serializeMaze(), null, 2); showToast("JSONを表示した"); });
+      document.getElementById("loadFromTextButton").addEventListener("click", () => {
+        try {
+          loadMazeState(JSON.parse(mazeJsonText.value));
+          showToast("テキスト欄からロードした");
+        } catch (error) {
+          showToast(`ロード失敗: ${error.message}`);
+        }
+      });
+      importFileInput.addEventListener("change", async () => {
+        const file = importFileInput.files?.[0];
+        if (!file) return;
+        try {
+          const text = await file.text();
+          loadMazeState(JSON.parse(text));
+          showToast("JSONからロードした");
+        } catch (error) {
+          showToast(`読み込み失敗: ${error.message}`);
+        } finally {
+          importFileInput.value = "";
+        }
+      });
+
+      document.getElementById("retrySameButton").addEventListener("click", () => { messageOverlay.classList.remove("visible"); regenerateSameMaze(); });
+      document.getElementById("newMazeButton").addEventListener("click", () => { messageOverlay.classList.remove("visible"); generateMaze({ seed: randomSeed(), width: game.mazeCellsWide, height: game.mazeCellsHigh }); });
+      document.getElementById("saveFromResultButton").addEventListener("click", saveMazeToLocalStorage);
+    }
+
+    bindEvents();
+    generateMaze({ seed: randomSeed(), width: 17, height: 17 });
+    updateInventoryUi();
+    resizeCanvas();
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>
